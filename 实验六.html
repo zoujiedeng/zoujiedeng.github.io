@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2019年各省人均GDP分布图 - WebGIS应用</title>
+
+    <!-- ArcGIS Maps SDK for JavaScript 5.0 样式 -->
+    <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css">
+    <!-- Calcite Design System 样式 -->
+    <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13/calcite.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+
+        /* ========== 整体布局 ========== */
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ========== 页眉区域（区域一） ========== */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            min-height: 60px;
+            padding: 0 24px;
+            background: linear-gradient(135deg, #165DFF 0%, #4080FF 100%);
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .app-header h1 {
+            font-size: 19px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .coords-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        /* ========== 主内容区域 ========== */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ========== 底图库侧边栏（区域三） ========== */
+        .sidebar {
+            width: 280px;
+            min-width: 280px;
+            background: #f8fafc;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-panel {
+            padding: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #165DFF;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #4080FF;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 底图切换按钮（扩展为 3列布局，容纳更多底图） */
+        .basemap-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+
+        .basemap-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 6px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            gap: 4px;
+        }
+
+        .basemap-btn:hover {
+            border-color: #4080FF;
+            background: #eff6ff;
+        }
+
+        .basemap-btn.active {
+            border-color: #165DFF;
+            background: #dbeafe;
+            box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.15);
+        }
+
+        .btn-icon {
+            font-size: 22px;
+        }
+
+        .btn-label {
+            font-size: 10px;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        /* 图层控制 */
+        .layer-info {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .layer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .layer-item:not(:last-child) {
+            border-bottom: 1px dotted #e2e8f0;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .status-dot.active {
+            background: #22c55e;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.6;
+            list-style: none;
+        }
+
+        .help-text li {
+            margin-bottom: 4px;
+        }
+
+        /* ========== 地图区域（区域二） ========== */
+        .map-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #map-view {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 放大比例尺，让它更明显 */
+        .esri-scale-bar {
+            transform: scale(1.4);
+            transform-origin: left bottom;
+        }
+
+        /* 响应式适配 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 240px;
+                min-width: 240px;
+            }
+            .app-header h1 {
+                font-size: 16px;
+            }
+            .subtitle {
+                display: none;
+            }
+            .basemap-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+
+    <!-- ArcGIS Maps SDK for JavaScript 5.0 模块引入 -->
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+</head>
+<body>
+    <div id="app-container">
+        <!-- 区域一：页眉 -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo-icon">🌏</div>
+                <h1>2019年各省人均GDP分布图 - WebGIS应用</h1>
+            </div>
+            <div class="header-right">
+                <span class="subtitle">ArcGIS Maps SDK for JavaScript 5.0</span>
+                <span class="coords-badge" id="coords-badge">坐标: --, --</span>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 区域三：底图库侧边栏 -->
+            <aside class="sidebar">
+                <!-- 底图库面板（已扩展为8种底图） -->
+                <div class="sidebar-panel">
+                    <div class="panel-title">
+                        <span>🗺️</span> 底图库
+                    </div>
+                    <div class="basemap-grid" id="basemap-grid">
+                        <button class="basemap-btn active" data-basemap="streets">
+                            <span class="btn-icon">🛣️</span>
+                            <span class="btn-label">街道图</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="topo-vector">
+                            <span class="btn-icon">🏔️</span>
+                            <span class="btn-label">地形图</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="satellite">
+                            <span class="btn-icon">🛰️</span>
+                            <span class="btn-label">卫星图</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="hybrid">
+                            <span class="btn-icon">🌥️</span>
+                            <span class="btn-label">影像注记</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="terrain">
+                            <span class="btn-icon">⛰️</span>
+                            <span class="btn-label">地形晕渲</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="dark-gray-vector">
+                            <span class="btn-icon">🌙</span>
+                            <span class="btn-label">深灰色</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="gray-vector">
+                            <span class="btn-icon">🌫️</span>
+                            <span class="btn-label">浅灰色</span>
+                        </button>
+                        <button class="basemap-btn" data-basemap="oceans">
+                            <span class="btn-icon">🌊</span>
+                            <span class="btn-label">海洋图</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 图层控制面板 -->
+                <div class="sidebar-panel">
+                    <div class="panel-title">
+                        <span>📊</span> 图层控制
+                    </div>
+                    <div class="layer-info">
+                        <div class="layer-item">
+                            <span><span class="status-dot active"></span> 底图图层</span>
+                            <span style="font-size:11px;color:#64748b;">已加载</span>
+                        </div>
+                        <div class="layer-item">
+                            <span><span class="status-dot active"></span> GDP专题图层</span>
+                            <span style="font-size:11px;color:#64748b;">2019各省人均GDP</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 图例面板 -->
+                <div class="sidebar-panel">
+                    <div class="panel-title">
+                        <span>📋</span> 图例
+                    </div>
+                    <div id="legend-container"></div>
+                </div>
+
+                <!-- 操作提示 -->
+                <div class="sidebar-panel">
+                    <div class="panel-title">
+                        <span>💡</span> 操作提示
+                    </div>
+                    <ul class="help-text">
+                        <li>🖱️ 滚轮缩放地图</li>
+                        <li>✋ 拖拽平移地图</li>
+                        <li>🔍 使用搜索框定位</li>
+                        <li>🗺️ 点击切换底图</li>
+                        <li>📋 右上角图层列表可控制图层显示</li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- 区域二：地图显示区域 -->
+            <main class="map-area">
+                <div id="map-view"></div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module">
+        // 导入 ArcGIS 模块
+        import Map from "https://js.arcgis.com/5.0/@arcgis/core/Map.js";
+        import MapView from "https://js.arcgis.com/5.0/@arcgis/core/views/MapView.js";
+        import FeatureLayer from "https://js.arcgis.com/5.0/@arcgis/core/layers/FeatureLayer.js";
+        import ScaleBar from "https://js.arcgis.com/5.0/@arcgis/core/widgets/ScaleBar.js";
+        import Legend from "https://js.arcgis.com/5.0/@arcgis/core/widgets/Legend.js";
+        import Search from "https://js.arcgis.com/5.0/@arcgis/core/widgets/Search.js";
+        import LayerList from "https://js.arcgis.com/5.0/@arcgis/core/widgets/LayerList.js";
+        import Expand from "https://js.arcgis.com/5.0/@arcgis/core/widgets/Expand.js";
+        import Home from "https://js.arcgis.com/5.0/@arcgis/core/widgets/Home.js";
+
+        // =============================================
+        // 配置参数（一打开就定位到中国）
+        // =============================================
+        const geosceneLayerUrl = "https://www.geosceneonline.cn/server/rest/services/Hosted/2019年各省人均GDP分布图/FeatureServer/0";
+        const initialBasemap = "streets";
+        const initialCenter = [104.0, 35.0]; // 中国中心点
+        const initialZoom = 4; // 直接显示全中国
+
+        // 创建地图
+        const map = new Map({
+            basemap: initialBasemap
+        });
+
+        // 添加 GDP 专题图层
+        const gdpLayer = new FeatureLayer({
+            url: geosceneLayerUrl,
+            title: "2019年各省人均GDP分布图",
+            visible: true,
+            opacity: 0.85
+        });
+        map.add(gdpLayer);
+
+        // 创建地图视图
+        const view = new MapView({
+            container: "map-view",
+            map: map,
+            center: initialCenter,
+            zoom: initialZoom,
+            constraints: {
+                minZoom: 3,
+                maxZoom: 19
+            }
+        });
+
+        // 视图加载完成后初始化所有控件
+        view.when().then(() => {
+            console.log("地图视图加载成功");
+
+            // 1. 比例尺（ScaleBar，已放大显示）
+            const scaleBar = new ScaleBar({
+                view: view,
+                unit: "metric",
+                style: "line"
+            });
+            view.ui.add(scaleBar, { position: "bottom-left" });
+
+            // 2. 图例（Legend）
+            const legend = new Legend({
+                view: view,
+                container: document.getElementById("legend-container"),
+                layerInfos: [
+                    {
+                        layer: gdpLayer,
+                        title: "2019年各省人均GDP"
+                    }
+                ]
+            });
+
+            // 3. 搜索框（Search）
+            const searchWidget = new Search({
+                view: view,
+                includeDefaultSources: true,
+                locationEnabled: true
+            });
+            view.ui.add(searchWidget, { position: "top-right" });
+
+            // 4. 图层列表（LayerList，实验要求必须的微件）
+            const layerList = new LayerList({
+                view: view
+            });
+            const layerListExpand = new Expand({
+                view: view,
+                content: layerList,
+                expandIcon: "layers",
+                expanded: false,
+                group: "top-right"
+            });
+            view.ui.add(layerListExpand, { position: "top-right" });
+
+            // 5. 主页按钮（Home）
+            const homeWidget = new Home({
+                view: view
+            });
+            view.ui.add(homeWidget, { position: "top-left" });
+
+            // 实时坐标更新
+            view.on("pointer-move", (event) => {
+                const point = view.toMap({ x: event.x, y: event.y });
+                if (point) {
+                    const lon = point.longitude.toFixed(2);
+                    const lat = point.latitude.toFixed(2);
+                    document.getElementById("coords-badge").textContent = `坐标: ${lon}, ${lat}`;
+                }
+            });
+
+            // 底图切换功能（绑定到view加载完成后，避免时序问题）
+            const basemapButtons = document.querySelectorAll(".basemap-btn");
+            basemapButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    basemapButtons.forEach((btn) => btn.classList.remove("active"));
+                    button.classList.add("active");
+                    const basemapId = button.getAttribute("data-basemap");
+                    if (basemapId && map) {
+                        map.basemap = basemapId;
+                        console.log("底图已切换至:", basemapId);
+                    }
+                });
+            });
+
+            console.log("所有控件初始化完成，实验要求功能全部实现");
+        }).catch((error) => {
+            console.error("地图加载失败:", error);
+        });
+
+        // 全局错误处理
+        window.addEventListener("error", (event) => {
+            console.error("全局错误:", event.error || event.message);
+        });
+    </script>
+</body>
+</html>
